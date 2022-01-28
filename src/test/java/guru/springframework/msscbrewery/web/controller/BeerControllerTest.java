@@ -14,7 +14,10 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.restdocs.RestDocumentationExtension;
+import org.springframework.restdocs.constraints.ConstraintDescriptions;
+import org.springframework.restdocs.payload.FieldDescriptor;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.util.StringUtils;
 
 import java.util.UUID;
 
@@ -25,6 +28,7 @@ import static org.mockito.BDDMockito.then;
 // import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
 import static org.springframework.restdocs.payload.PayloadDocumentation.*;
+import static org.springframework.restdocs.snippet.Attributes.key;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.springframework.restdocs.request.RequestDocumentation.*;
 import static org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders.*;
@@ -35,18 +39,20 @@ import static org.springframework.restdocs.mockmvc.RestDocumentationRequestBuild
 public class BeerControllerTest {
 
     @MockBean
-    BeerService beerService;
+    private BeerService beerService;
 
     @Autowired
-    MockMvc mockMvc;
+    private MockMvc mockMvc;
 
     @Autowired
-    ObjectMapper objectMapper;
+    private ObjectMapper objectMapper;
 
-    BeerDto validBeer;
+    private BeerDto validBeer;
 
+    private ConstrainedFields constrainedFields;
     @BeforeEach
     public void setUp() {
+        constrainedFields = new ConstrainedFields(BeerDto.class);
         validBeer = BeerDto.builder().id(UUID.randomUUID())
                 .beerName("Beer1")
                 .beerStyle("PALE_ALE")
@@ -68,12 +74,12 @@ public class BeerControllerTest {
                                 parameterWithName("beerId").description("Unique beer identifier")
                         )
                         , responseFields(
-                              fieldWithPath("id").description("Unique beer identifier")
-                            , fieldWithPath("beerName").description("Name of the beer")
-                            , fieldWithPath("beerStyle").description("the type of beer")
-                            , fieldWithPath("upc").description("unique upc value for the beer")
-                            , fieldWithPath("createdDate").ignored()
-                            , fieldWithPath("lastUpdatedDate").ignored()
+                                constrainedFields.withPath("id").description("Unique beer identifier")
+                            , constrainedFields.withPath("beerName").description("Name of the beer")
+                            , constrainedFields.withPath("beerStyle").description("the type of beer")
+                            , constrainedFields.withPath("upc").description("unique upc value for the beer")
+                            , constrainedFields.withPath("createdDate").ignored()
+                            , constrainedFields.withPath("lastUpdatedDate").ignored()
                 )));
     }
 
@@ -93,12 +99,12 @@ public class BeerControllerTest {
                 .andExpect(status().isCreated())
                 .andDo(document("v1/beer-post",
                      requestFields(
-                           fieldWithPath("id").ignored()
-                         , fieldWithPath("createdDate").ignored()
-                         , fieldWithPath("lastUpdatedDate").ignored()
-                         , fieldWithPath("beerName").description("Name of the beer")
-                         , fieldWithPath("beerStyle").description("The type of the beer")
-                         , fieldWithPath("upc").description("Unique upc identifier of the beer")
+                             constrainedFields.withPath("id").ignored()
+                         , constrainedFields.withPath("createdDate").ignored()
+                         , constrainedFields.withPath("lastUpdatedDate").ignored()
+                         , constrainedFields.withPath("beerName").description("Name of the beer")
+                         , constrainedFields.withPath("beerStyle").description("The type of the beer")
+                         , constrainedFields.withPath("upc").description("Unique upc identifier of the beer")
 
                      )));
 
@@ -131,5 +137,20 @@ public class BeerControllerTest {
 
         then(beerService).should().updateBeer(any(), any());
 
+    }
+
+    private static class ConstrainedFields {
+
+        private final ConstraintDescriptions constraintDescriptions;
+
+        ConstrainedFields(Class<?> input) {
+            this.constraintDescriptions = new ConstraintDescriptions(input);
+        }
+
+        private FieldDescriptor withPath(String path) {
+            return fieldWithPath(path).attributes(key("constraints").value(StringUtils
+                    .collectionToDelimitedString(this.constraintDescriptions
+                            .descriptionsForProperty(path), ". ")));
+        }
     }
 }
